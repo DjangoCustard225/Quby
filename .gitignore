@@ -1,0 +1,15 @@
+.build/
+.build-cache/
+.swiftpm/
+.bsp/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+xtool/
+*.ipa
+*.log
+*.dSYM/
+__pycache__/
+.DS_Store
+.env
+.env.*

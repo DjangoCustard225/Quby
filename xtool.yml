@@ -1,0 +1,21 @@
+version: 1
+bundleID: app.quby.client
+infoPath: xtool-Info.plist
+iconPath: Resources/AppIcon.png
+resources:
+  - Resources/PrivacyInfo.xcprivacy
+  - Resources/AppIcons/AppIcon20x20.png
+  - Resources/AppIcons/AppIcon20x20@2x.png
+  - Resources/AppIcons/AppIcon20x20@3x.png
+  - Resources/AppIcons/AppIcon29x29.png
+  - Resources/AppIcons/AppIcon29x29@2x.png
+  - Resources/AppIcons/AppIcon29x29@3x.png
+  - Resources/AppIcons/AppIcon40x40.png
+  - Resources/AppIcons/AppIcon40x40@2x.png
+  - Resources/AppIcons/AppIcon40x40@3x.png
+  - Resources/AppIcons/AppIcon60x60.png
+  - Resources/AppIcons/AppIcon60x60@2x.png
+  - Resources/AppIcons/AppIcon60x60@3x.png
+  - Resources/AppIcons/AppIcon76x76.png
+  - Resources/AppIcons/AppIcon76x76@2x.png
+  - Resources/AppIcons/AppIcon83.5x83.5@2x.png
