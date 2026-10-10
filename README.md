@@ -11,10 +11,7 @@ Manage your torrents from an iPhone or iPad. Requires iOS 26 or later and a reac
 
 <table>
   <tr>
-    <td><img src="docs/screenshots/torrent-details.png" width="240" alt="Torrent details with progress, status, and file information"></td>
-    <td><img src="docs/screenshots/activity.png" width="240" alt="Activity with transfer speeds and session statistics"></td>
-    <td><img src="docs/screenshots/search.png" width="240" alt="Search with category and tracker browsing"></td>
-    <td><img src="docs/screenshots/settings.png" width="240" alt="Settings with server instances, speed limits, and appearance controls"></td>
+    <td nowrap><img src="docs/screenshots/torrent-details.png" width="320" alt="Torrent details with progress, status, and file information">&nbsp;<img src="docs/screenshots/activity.png" width="320" alt="Activity with transfer speeds and session statistics">&nbsp;<img src="docs/screenshots/search.png" width="320" alt="Search with category and tracker browsing">&nbsp;<img src="docs/screenshots/settings.png" width="320" alt="Settings with server instances, speed limits, and appearance controls"></td>
   </tr>
 </table>
 
