@@ -2,6 +2,9 @@ import SwiftUI
 
 struct SettingsView: View {
     let store: TransferStore
+    @AppStorage("appearance") private var appearance = AppAppearance.dark
+    @AppStorage("torrentDensity") private var density = TorrentDensity.comfortable
+    @AppStorage("torrentScrollIntensity") private var scrollIntensity = TorrentScrollIntensity.full
     var body: some View {
         NavigationStack {
             Form {
@@ -9,32 +12,26 @@ struct SettingsView: View {
                     NavigationLink {
                         InstancesView(store: store)
                     } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "server.rack")
-                                .foregroundStyle(.blue)
-                                .frame(width: 32)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("Instances")
-                                    .font(.headline)
-                                Text(
-                                    store.activeInstance.map { "Active: \($0.name)" }
-                                        ?? "Add your first server"
-                                )
-                                .font(.caption)
-                                .foregroundStyle(AppTheme.secondaryText)
-                            }
-                        }
-                        .padding(.vertical, 5)
+                        Label("Instances", systemImage: "server.rack")
+                    }
+                    NavigationLink {
+                        SpeedLimitsView(store: store)
+                    } label: {
+                        Label("Speed limits", systemImage: "speedometer")
                     }
                 }
                 .listRowBackground(AppTheme.formRowBackground)
-                Section("Privacy & Security") {
-                    Label("Saved passwords and API keys stay in this device’s Keychain.", systemImage: "key")
-                    Label("Instance details and recent searches stay on this device.", systemImage: "iphone")
-                    Label("Quby contacts only the servers you configure.", systemImage: "network")
+                Section("Appearance") {
+                    Picker("Theme", selection: $appearance) {
+                        ForEach(AppAppearance.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    Picker("Torrent list density", selection: $density) {
+                        ForEach(TorrentDensity.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    Picker("Scroll effects", selection: $scrollIntensity) {
+                        ForEach(TorrentScrollIntensity.allCases) { Text($0.rawValue).tag($0) }
+                    }
                 }
-                .font(.subheadline)
-                .foregroundStyle(AppTheme.secondaryText)
                 .listRowBackground(AppTheme.formRowBackground)
             }
             .scrollContentBackground(.hidden)

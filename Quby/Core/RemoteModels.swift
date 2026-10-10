@@ -53,6 +53,7 @@ struct TransferInfo: Decodable, Equatable, Sendable {
     let uploadSpeed: Int64
     let downloadedBytes: Int64
     let uploadedBytes: Int64
+    var alternativeSpeedLimits: Bool? = nil
     static let zero = TransferInfo(
         downloadSpeed: 0, uploadSpeed: 0, downloadedBytes: 0, uploadedBytes: 0)
     enum CodingKeys: String, CodingKey {
@@ -60,6 +61,7 @@ struct TransferInfo: Decodable, Equatable, Sendable {
         case uploadSpeed = "up_info_speed"
         case downloadedBytes = "dl_info_data"
         case uploadedBytes = "up_info_data"
+        case alternativeSpeedLimits = "use_alt_speed_limits"
     }
 
 }

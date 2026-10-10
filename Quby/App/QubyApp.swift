@@ -10,6 +10,7 @@ struct QubyApp: App {
 enum AppTab: Hashable { case transfers, activity, settings, search }
 
 struct QubyRoot: View {
+    @AppStorage("appearance") private var appearance = AppAppearance.dark
     @State private var store = TransferStore()
     @State private var selectedTab: AppTab = .transfers
     @State private var searchSession = TorrentSearchSession()
@@ -34,7 +35,7 @@ struct QubyRoot: View {
         .onChange(of: store.activeInstanceID, initial: true) { _, id in
             searchSession.activateInstance(id)
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(appearance.colorScheme)
         .scrollEdgeEffectStyle(.soft, for: [.top, .bottom])
         .onOpenURL { url in
             if url.scheme?.lowercased() == "magnet" {

@@ -3,6 +3,9 @@ enum TorrentCommand: Sendable {
     case category(String)
     case recheck
     case reannounce
+    case pause
+    case resume
+    case delete(deleteFiles: Bool)
 }
 
 enum TorrentCommandResult {

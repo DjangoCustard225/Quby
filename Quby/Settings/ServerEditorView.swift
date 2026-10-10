@@ -56,24 +56,8 @@ struct ServerEditorView: View {
                         .keyboardType(.asciiCapable)
                     }
                     Toggle("Remember login", isOn: $remember)
-                    if address.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().hasPrefix(
-                        "http://")
-                    {
-                        Label(
-                            "HTTP sends your login credentials without encryption. Use HTTPS outside a trusted local network.",
-                            systemImage: "exclamationmark.triangle"
-                        )
-                        .font(.footnote)
-                        .foregroundStyle(.orange)
-                    }
                 } header: {
                     Text("Authentication")
-                } footer: {
-                    if authentication == .apiKey {
-                        Text(
-                            "Requires qBittorrent 5.2 or later. Generate an API key in its Web UI settings under Web UI → API Key."
-                        )
-                    }
                 }
                 .listRowBackground(AppTheme.formRowBackground)
                 if let connectionError {

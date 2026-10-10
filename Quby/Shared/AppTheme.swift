@@ -1,19 +1,56 @@
 import SwiftUI
 
 enum AppTheme {
-    static let background = Color.black
-    static let cardBackground = Color(white: 0.08)
-    static let formRowBackground = Color(white: 0.11)
-    static let secondaryText = Color.white.opacity(0.72)
-    static let border = Color.white.opacity(0.22)
+    static let background = adaptive(light: .systemGroupedBackground, dark: .black)
+    static let cardBackground = adaptive(light: .white, dark: UIColor(white: 0.08, alpha: 1))
+    static let formRowBackground = adaptive(light: .white, dark: UIColor(white: 0.11, alpha: 1))
+    static let primaryText = Color.primary
+    static let secondaryText = Color(uiColor: .secondaryLabel)
+    static let border = adaptive(
+        light: UIColor.black.withAlphaComponent(0.14), dark: UIColor.white.withAlphaComponent(0.22))
+
+    static func adaptive(light: UIColor, dark: UIColor) -> Color {
+        Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? dark : light })
+    }
+}
+
+enum AppAppearance: String, CaseIterable, Identifiable {
+    case system = "System"
+    case light = "Light"
+    case dark = "Dark"
+    var id: Self { self }
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
+        }
+    }
+}
+
+enum TorrentDensity: String, CaseIterable, Identifiable {
+    case comfortable = "Comfortable"
+    case compact = "Compact"
+    var id: Self { self }
+}
+
+enum TorrentScrollIntensity: String, CaseIterable, Identifiable {
+    case off = "Off"
+    case subtle = "Subtle"
+    case full = "Full"
+    var id: Self { self }
 }
 
 extension TransferState {
     var color: Color {
         switch self {
-        case .seeding: .green
-        case .downloading: .cyan
-        case .paused, .queued, .stalled: .orange
+        case .seeding:
+            AppTheme.adaptive(
+                light: UIColor(red: 0.05, green: 0.48, blue: 0.24, alpha: 1), dark: .systemGreen)
+        case .downloading:
+            AppTheme.adaptive(light: UIColor(red: 0, green: 0.39, blue: 0.65, alpha: 1), dark: .systemCyan)
+        case .paused, .queued, .stalled:
+            AppTheme.adaptive(light: UIColor(red: 0.62, green: 0.32, blue: 0, alpha: 1), dark: .systemOrange)
         case .checking: .blue
         case .error: .red
         case .unknown: .secondary

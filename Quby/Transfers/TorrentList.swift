@@ -120,13 +120,16 @@ struct TorrentRows: View {
 }
 
 private struct TorrentCardScrollEffect: ViewModifier {
+    @AppStorage("torrentScrollIntensity") private var intensity = TorrentScrollIntensity.full
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.torrentScrollEffectsEnabled) private var effectsEnabled
     @Environment(\.torrentScrollAtTop) private var isAtTop
 
     func body(content: Content) -> some View {
-        let active = effectsEnabled && !reduceMotion
+        let active = effectsEnabled && !reduceMotion && intensity != .off
         let atTop = isAtTop
+        let opacity = intensity == .subtle ? 0.88 : 0.65
+        let scale = intensity == .subtle ? 0.98 : 0.92
         return content.scrollTransition(
             // Keep the transition graph stable while the system jumps across lazy rows.
             // Disabling effects changes their values rather than replacing configurations.
@@ -137,13 +140,14 @@ private struct TorrentCardScrollEffect: ViewModifier {
             let applyEffect = active && !phase.isIdentity && !(atTop && phase == .topLeading)
             return
                 effect
-                .opacity(applyEffect ? 0.65 : 1)
-                .scaleEffect(applyEffect ? 0.92 : 1)
+                .opacity(applyEffect ? opacity : 1)
+                .scaleEffect(applyEffect ? scale : 1)
         }
     }
 }
 
 private struct TorrentRow: View, Equatable {
+    @AppStorage("torrentDensity") private var density = TorrentDensity.comfortable
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let torrent: Torrent
     let open: () -> Void
@@ -157,14 +161,17 @@ private struct TorrentRow: View, Equatable {
         lhs.torrent == rhs.torrent && lhs.canControl == rhs.canControl && lhs.isFresh == rhs.isFresh
             && lhs.isToggling == rhs.isToggling && lhs.dynamicTypeSize == rhs.dynamicTypeSize
             && lhs.isSelecting == rhs.isSelecting && lhs.isSelected == rhs.isSelected
+            && lhs.density == rhs.density
     }
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
             Button(action: open) {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: density == .compact ? 4 : 6) {
                     Text(torrent.name)
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(.white)
+                        .font(
+                            density == .compact ? .subheadline.weight(.semibold) : .headline.weight(.semibold)
+                        )
+                        .foregroundStyle(AppTheme.primaryText)
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                         .multilineTextAlignment(.leading)
                     Text(torrent.category + " · " + torrent.size)
@@ -207,7 +214,7 @@ private struct TorrentRow: View, Equatable {
                     canControl: canControl, isPending: isToggling, action: toggle)
             }
         }
-        .padding(.vertical, 16)
+        .padding(.vertical, density == .compact && !dynamicTypeSize.isAccessibilitySize ? 10 : 16)
         .padding(.horizontal, 12)
         .darkCard(cornerRadius: 22)
         .overlay {
@@ -262,12 +269,12 @@ private struct TorrentControlButton: View {
                     .contentTransition(reduceMotion ? .opacity : .symbolEffect(.replace))
                     .opacity(showsProgress ? 0 : 1)
                 if showsProgress {
-                    ProgressView().controlSize(.mini).tint(.white)
+                    ProgressView().controlSize(.mini).tint(AppTheme.primaryText)
                         .transition(.opacity)
                 }
             }
             .frame(width: 20, height: 20)
-            .foregroundStyle(canControl ? Color.white : Color.secondary)
+            .foregroundStyle(canControl ? AppTheme.primaryText : Color.secondary)
             .animation(reduceMotion ? nil : .smooth(duration: 0.22), value: isPaused)
             .animation(.easeInOut(duration: 0.16), value: showsProgress)
         }
@@ -293,8 +300,10 @@ private struct TorrentControlStyle: ButtonStyle {
         let pressed = configuration.isPressed && isEnabled
         configuration.label
             .frame(width: 36, height: 36)
-            .background(Color.white.opacity(pressed ? 0.22 : 0.14), in: Circle())
-            .overlay { Circle().strokeBorder(Color.white.opacity(pressed ? 0.20 : 0.08), lineWidth: 0.5) }
+            .background(AppTheme.primaryText.opacity(pressed ? 0.22 : 0.14), in: Circle())
+            .overlay {
+                Circle().strokeBorder(AppTheme.primaryText.opacity(pressed ? 0.20 : 0.08), lineWidth: 0.5)
+            }
             .scaleEffect(pressed && !reduceMotion ? 0.94 : 1)
             .animation(
                 reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.86), value: pressed

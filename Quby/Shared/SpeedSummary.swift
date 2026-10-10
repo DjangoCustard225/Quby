@@ -25,7 +25,7 @@ struct SpeedSummary: View {
                 .foregroundStyle(color)
             Text(store.hasFreshData ? Torrent.bytes(bytes) + "/s" : "—")
                 .font(.title3.weight(.semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(AppTheme.primaryText)
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)

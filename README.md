@@ -12,9 +12,11 @@ Manage your torrents from an iPhone or iPad. Requires iOS 26 or later and a reac
 - Live transfers, speed summaries, and torrent details.
 - Search by name, category, or tracker.
 - Multiple server instances with password or API key login.
-- Add magnet links and `.torrent` files.
+- Add magnet links and `.torrent` files with saved location and start-paused options.
 - Pause, resume, delete, and change file priorities.
-- Select multiple torrents to change location or category, recheck, or reannounce.
+- Bulk pause, resume, delete, location/category changes, recheck, and reannounce.
+- Normal and alternative speed limits in Settings.
+- Light, dark, or system appearance; adjustable list density and scroll effects.
 
 ## Connect
 

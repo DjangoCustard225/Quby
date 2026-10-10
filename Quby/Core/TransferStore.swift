@@ -14,6 +14,7 @@ final class TransferStore {
     private(set) var online = false
     private(set) var connecting = false
     @ObservationIgnored private var working = false
+    @ObservationIgnored private var mutationWaiters: [CheckedContinuation<Void, Never>] = []
     var error: String?
     private(set) var connectionIssue: String?
     private(set) var lastUpdated: Date?
@@ -308,6 +309,7 @@ final class TransferStore {
         let wasActive = activeInstanceID == id
         instances.removeAll { $0.id == id }
         Credentials.remove(id: id)
+        UserDefaults.standard.removeObject(forKey: "addDefaults." + id)
         if wasActive {
             resetConnection()
             activeInstanceID = nil
@@ -326,6 +328,9 @@ final class TransferStore {
         online = false
         connecting = false
         working = false
+        let waiters = mutationWaiters
+        mutationWaiters.removeAll()
+        for waiter in waiters { waiter.resume() }
         refreshing = false
         remoteRecords = []
         revision += 1
@@ -419,36 +424,50 @@ final class TransferStore {
         }
     }
     func toggle(_ id: String) async {
-        guard canControl, !working, !pendingToggles.contains(id),
+        guard canControl, !pendingToggles.contains(id),
             let item = torrents.first(where: { $0.id == id })
         else { return }
         pendingToggles.insert(id)
         let token = generation
         defer { if generation == token { pendingToggles.remove(id) } }
-        _ = await mutate { try await $0.setPaused(hash: id, paused: item.state != .paused) }
+        _ = await mutate {
+            guard self.torrents.contains(where: { $0.id == id }) else { throw QBError.invalidSelection }
+            try await $0.setPaused(hash: id, paused: item.state != .paused)
+        }
     }
     func delete(_ id: String, deleteFiles: Bool) async -> Bool {
         guard torrents.contains(where: { $0.id == id }) else { return false }
         return await mutate { try await $0.delete(hash: id, deleteFiles: deleteFiles) }
     }
-    func torrentFiles(_ id: String) async -> [TorrentFile]? {
-        guard let api, connected else { return nil }
+    func torrentFiles(_ id: String) async throws -> [TorrentFile] {
+        guard let api, connected else { throw QBError.expired }
         let token = generation
         do {
             let files = try await api.files(hash: id)
-            return token == generation ? files : nil
+            guard token == generation else { throw CancellationError() }
+            return files
         } catch {
-            if token == generation { self.error = error.localizedDescription }
-            return nil
+            if token == generation { handleDetailFailure(error) }
+            throw error
         }
     }
-    func torrentTrackers(_ id: String) async -> [TorrentTracker]? {
-        guard let api, connected else { return nil }
+    func torrentTrackers(_ id: String) async throws -> [TorrentTracker] {
+        guard let api, connected else { throw QBError.expired }
         let token = generation
         do {
             let trackers = try await api.trackers(hash: id)
-            return token == generation ? trackers : nil
-        } catch { return nil }
+            guard token == generation else { throw CancellationError() }
+            return trackers
+        } catch {
+            if token == generation { handleDetailFailure(error) }
+            throw error
+        }
+    }
+    private func handleDetailFailure(_ error: Error) {
+        switch error {
+        case QBError.expired, QBError.apiKeyRejected: handle(error, notify: false)
+        default: break
+        }
     }
     func setFilePriority(torrent id: String, fileID: Int, priority: Int) async -> Bool {
         await mutate { try await $0.setFilePriority(hash: id, fileID: fileID, priority: priority) }
@@ -477,69 +496,124 @@ final class TransferStore {
         else {
             return .failed("The selected torrents are no longer available on this instance.")
         }
-        guard canControl, !working else {
-            return .failed(
-                working ? "Wait for the current request to finish." : "Reconnect to your server first.")
+        guard canControl else {
+            return .failed("Reconnect to your server first.")
         }
         var failure: String?
         let accepted = await mutate(
             acceptedWithoutRefresh: true, onFailure: { failure = $0 },
             { api in
+                guard self.activeInstanceID == instanceID,
+                    ids.isSubset(of: Set(self.torrents.map(\.id)))
+                else { throw QBError.invalidSelection }
                 let hashes = ids.sorted()
                 switch command {
                 case .location(let path): try await api.setLocation(hashes: hashes, location: path)
                 case .category(let name): try await api.setCategory(hashes: hashes, category: name)
                 case .recheck: try await api.recheck(hashes: hashes)
                 case .reannounce: try await api.reannounce(hashes: hashes)
+                case .pause: try await api.setPaused(hashes: hashes, paused: true)
+                case .resume: try await api.setPaused(hashes: hashes, paused: false)
+                case .delete(let deleteFiles): try await api.delete(hashes: hashes, deleteFiles: deleteFiles)
                 }
             })
         return accepted ? .accepted : .failed(failure ?? "The request was interrupted. Try again.")
     }
-    func add(link: String, category: String, automaticManagement: Bool) async -> Bool {
-        guard canControl else {
-            error = "Connect to your server first."
-            return false
-        }
-        return await mutate(acceptedWithoutRefresh: true) {
-            try await $0.add(link: link, category: category, automaticManagement: automaticManagement)
-        }
-    }
-    func add(file: Data, filename: String, category: String, automaticManagement: Bool) async -> Bool {
+    func add(
+        link: String, category: String, automaticManagement: Bool, location: String = "",
+        startPaused: Bool = false
+    ) async -> Bool {
         guard canControl else {
             error = "Connect to your server first."
             return false
         }
         return await mutate(acceptedWithoutRefresh: true) {
             try await $0.add(
-                file: file, filename: filename, category: category, automaticManagement: automaticManagement
+                link: link, category: category, automaticManagement: automaticManagement, location: location,
+                startPaused: startPaused)
+        }
+    }
+    func add(
+        file: Data, filename: String, category: String, automaticManagement: Bool, location: String = "",
+        startPaused: Bool = false
+    ) async -> Bool {
+        guard canControl else {
+            error = "Connect to your server first."
+            return false
+        }
+        return await mutate(acceptedWithoutRefresh: true) {
+            try await $0.add(
+                file: file, filename: filename, category: category, automaticManagement: automaticManagement,
+                location: location, startPaused: startPaused
             )
         }
     }
+    func speedLimits() async throws -> SpeedLimits {
+        guard connected, let api else { throw QBError.expired }
+        let token = generation
+        do {
+            let limits = try await api.speedLimits()
+            guard token == generation else { throw CancellationError() }
+            return limits
+        } catch {
+            if token == generation { handle(error, notify: false) }
+            throw error
+        }
+    }
+
+    func setSpeedLimits(_ limits: SpeedLimits, onFailure: @escaping (String) -> Void) async -> Bool {
+        await mutate(acceptedWithoutRefresh: true, onFailure: onFailure) {
+            try await $0.setSpeedLimits(limits)
+        }
+    }
+
+    func setAlternativeSpeedLimits(_ enabled: Bool, onFailure: @escaping (String) -> Void) async -> Bool {
+        await mutate(onFailure: onFailure) { try await $0.setAlternativeSpeedLimits(enabled) }
+    }
+
     private func mutate(
         acceptedWithoutRefresh: Bool = false, onFailure: ((String) -> Void)? = nil,
         _ action: (QBittorrentAPI) async throws -> Void
     ) async -> Bool {
-        guard canControl, !working, let api else { return false }
-        revision += 1
+        guard canControl else { return false }
         let token = generation
+        if working { await withCheckedContinuation { mutationWaiters.append($0) } }
+        guard token == generation else { return false }
+        // A queued request belongs to the connection on which it was submitted.
+        guard canControl, !Task.isCancelled, let api else {
+            releaseMutation(token: token)
+            return false
+        }
+        revision += 1
         let snapshotRevision = revision
         working = true
-        defer { if token == generation { working = false } }
+        defer { releaseMutation(token: token) }
         do {
             try await action(api)
             guard token == generation else { return false }
             if acceptedWithoutRefresh {
-                working = false
                 Task { await refresh() }
                 return true
             }
-            let snapshot = try await api.snapshot()
-            guard token == generation else { return false }
-            await apply(snapshot, token: token, revision: snapshotRevision)
+            do {
+                let snapshot = try await api.snapshot()
+                guard token == generation else { return false }
+                await apply(snapshot, token: token, revision: snapshotRevision)
+            } catch {
+                if token == generation {
+                    online = false
+                    handle(error, notify: false)
+                }
+            }
             return token == generation
         } catch {
             if token == generation { handle(error, onFailure: onFailure) }
             return false
         }
+    }
+
+    private func releaseMutation(token: UUID) {
+        guard token == generation else { return }
+        if mutationWaiters.isEmpty { working = false } else { mutationWaiters.removeFirst().resume() }
     }
 }

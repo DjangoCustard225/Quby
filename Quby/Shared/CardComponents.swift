@@ -7,7 +7,7 @@ struct CardSectionTitle: View {
     init(_ title: String) { self.title = title }
 
     var body: some View {
-        Text(title).font(.headline).foregroundStyle(.white).padding(.horizontal, 2)
+        Text(title).font(.headline).foregroundStyle(AppTheme.primaryText).padding(.horizontal, 2)
     }
 }
 
@@ -33,7 +33,7 @@ struct MetricCard: View {
                 if monospacedDigits { Text(value).monospacedDigit() } else { Text(value) }
             }
             .font(.title3.weight(.semibold))
-            .foregroundStyle(.white)
+            .foregroundStyle(AppTheme.primaryText)
             .lineLimit(1)
             .minimumScaleFactor(0.8)
         }
@@ -65,7 +65,7 @@ struct DetailRow: View {
                     Text(value)
                 }
             }
-            .foregroundStyle(.white).multilineTextAlignment(.trailing)
+            .foregroundStyle(AppTheme.primaryText).multilineTextAlignment(.trailing)
         }
         .font(.subheadline)
         .padding(.vertical, 15)

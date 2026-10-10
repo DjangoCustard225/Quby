@@ -25,7 +25,7 @@ struct InstancesView: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(instance.name)
                                         .font(.headline)
-                                        .foregroundStyle(.white)
+                                        .foregroundStyle(AppTheme.primaryText)
                                     Text(instance.address)
                                         .font(.subheadline)
                                         .foregroundStyle(AppTheme.secondaryText)
@@ -78,8 +78,6 @@ struct InstancesView: View {
                 }
             } header: {
                 Text("Saved Instances")
-            } footer: {
-                Text("Tap to switch or reconnect · Swipe to edit or delete")
             }
         }
         .scrollContentBackground(.hidden)

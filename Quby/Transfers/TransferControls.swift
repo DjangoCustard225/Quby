@@ -79,7 +79,7 @@ struct TransferFilterMenu: View, Equatable {
         } label: {
             Image(systemName: "line.3.horizontal.decrease")
                 .font(.body.weight(.semibold))
-                .foregroundStyle(hasActiveOptions ? Color.blue : Color.white)
+                .foregroundStyle(hasActiveOptions ? Color.blue : AppTheme.primaryText)
                 .frame(width: 44, height: 44)
                 .overlay(alignment: .topTrailing) {
                     if hasActiveOptions {

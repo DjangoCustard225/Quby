@@ -83,6 +83,7 @@ final class QBittorrentAPI {
     private let delegate = NoRedirects()
     private var sessionCookie: HTTPCookie?
     private var apiKey: String?
+    private var sync = TorrentSync()
     private(set) var version = ""
 
     init(address: String) throws {
@@ -200,6 +201,7 @@ final class QBittorrentAPI {
     }
 
     func login(username: String, password: String) async throws {
+        sync = TorrentSync()
         apiKey = nil
         sessionCookie = nil
         version = ""
@@ -234,6 +236,7 @@ final class QBittorrentAPI {
     }
 
     func login(apiKey input: String) async throws {
+        sync = TorrentSync()
         apiKey = nil
         sessionCookie = nil
         version = ""
@@ -259,24 +262,48 @@ final class QBittorrentAPI {
     }
 
     func snapshot() async throws -> TransferSnapshot {
-        // Serial requests keep a snapshot simple and avoid overlapping connection changes.
-        let torrents = try await decode([RemoteTorrent].self, path: "torrents/info")
-        let info = try await decode(TransferInfo.self, path: "transfer/info")
-        return TransferSnapshot(torrents: torrents, info: info)
+        try await sync.snapshot { rid in
+            try await self.request("sync/maindata", query: ["rid": String(rid)]).0
+        }
     }
 
     func setPaused(hash: String, paused: Bool) async throws {
-        let major =
-            Int(
-                version.trimmingCharacters(in: CharacterSet(charactersIn: "v")).split(separator: ".").first
-                    ?? "5") ?? 5
-        let action = major >= 5 ? (paused ? "stop" : "start") : (paused ? "pause" : "resume")
-        _ = try await request("torrents/" + action, fields: ["hashes": hash])
+        try await setPaused(hashes: [hash], paused: paused)
+    }
+
+    private var majorVersion: Int {
+        Int(version.drop(while: { $0 == "v" }).split(separator: ".").first ?? "5") ?? 5
+    }
+
+    func setPaused(hashes: [String], paused: Bool) async throws {
+        let action = majorVersion >= 5 ? (paused ? "stop" : "start") : (paused ? "pause" : "resume")
+        _ = try await request("torrents/" + action, fields: ["hashes": try hashList(hashes)])
     }
 
     func delete(hash: String, deleteFiles: Bool) async throws {
+        try await delete(hashes: [hash], deleteFiles: deleteFiles)
+    }
+
+    func delete(hashes: [String], deleteFiles: Bool) async throws {
         _ = try await request(
-            "torrents/delete", fields: ["hashes": hash, "deleteFiles": deleteFiles ? "true" : "false"])
+            "torrents/delete",
+            fields: ["hashes": try hashList(hashes), "deleteFiles": deleteFiles ? "true" : "false"])
+    }
+
+    func speedLimits() async throws -> SpeedLimits {
+        try await decode(SpeedLimits.self, path: "app/preferences")
+    }
+
+    func setSpeedLimits(_ limits: SpeedLimits) async throws {
+        let data = try JSONEncoder().encode(limits)
+        _ = try await request("app/setPreferences", fields: ["json": String(decoding: data, as: UTF8.self)])
+    }
+
+    func setAlternativeSpeedLimits(_ enabled: Bool) async throws {
+        let mode = try await decode(Int.self, path: "transfer/speedLimitsMode")
+        if (mode == 1) != enabled {
+            _ = try await request("transfer/toggleSpeedLimitsMode", fields: [:])
+        }
     }
 
     private func hashList(_ hashes: [String]) throws -> String {
@@ -338,17 +365,36 @@ final class QBittorrentAPI {
             ])
     }
 
-    func add(link: String, category: String, automaticManagement: Bool) async throws {
-        let boundary = "Quby-" + UUID().uuidString
-        let fields = [
-            "urls": link, "category": category, "autoTMM": automaticManagement ? "true" : "false",
+    private func addFields(category: String, automaticManagement: Bool, location: String, startPaused: Bool)
+        -> [String: String]
+    {
+        var fields = [
+            "category": category, "autoTMM": automaticManagement ? "true" : "false",
+            majorVersion >= 5 ? "stopped" : "paused": startPaused ? "true" : "false",
         ]
+        let path = location.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !automaticManagement && !path.isEmpty { fields["savepath"] = path }
+        return fields
+    }
+
+    func add(
+        link: String, category: String, automaticManagement: Bool, location: String = "",
+        startPaused: Bool = false
+    ) async throws {
+        let boundary = "Quby-" + UUID().uuidString
+        var fields = addFields(
+            category: category, automaticManagement: automaticManagement, location: location,
+            startPaused: startPaused)
+        fields["urls"] = link
         var body = multipart(fields, boundary: boundary)
         body.append(Data("--\(boundary)--\r\n".utf8))
         try await submit(body, boundary: boundary)
     }
 
-    func add(file: Data, filename: String, category: String, automaticManagement: Bool) async throws {
+    func add(
+        file: Data, filename: String, category: String, automaticManagement: Bool, location: String = "",
+        startPaused: Bool = false
+    ) async throws {
         guard !file.isEmpty else { throw QBError.rejected }
         let boundary = "Quby-" + UUID().uuidString
         let safeName =
@@ -357,7 +403,9 @@ final class QBittorrentAPI {
             .replacingOccurrences(of: "\n", with: "")
             .replacingOccurrences(of: "\"", with: "")
         var body = multipart(
-            ["category": category, "autoTMM": automaticManagement ? "true" : "false"], boundary: boundary)
+            addFields(
+                category: category, automaticManagement: automaticManagement, location: location,
+                startPaused: startPaused), boundary: boundary)
         body.append(
             Data(
                 "--\(boundary)\r\nContent-Disposition: form-data; name=\"torrents\"; filename=\"\(safeName)\"\r\nContent-Type: application/x-bittorrent\r\n\r\n"

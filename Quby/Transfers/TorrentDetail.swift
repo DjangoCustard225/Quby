@@ -8,7 +8,10 @@ struct TorrentDetail: View {
     @State private var removal: RemovalAction?
     @State private var files: [TorrentFile] = []
     @State private var trackers: [TorrentTracker] = []
-    @State private var loadingDetails = false
+    @State private var loadingFiles = false
+    @State private var loadingTrackers = false
+    @State private var filesError: String?
+    @State private var trackersError: String?
     @State private var changingFile: Int?
     private enum RemovalAction: String {
         case delete = "Delete"
@@ -20,10 +23,15 @@ struct TorrentDetail: View {
             : [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
     }
     private var current: Torrent { store.torrents.first(where: { $0.id == torrent.id }) ?? torrent }
+    private var isAvailable: Bool { store.torrents.contains { $0.id == torrent.id } }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 ServerMessage(store: store)
+                if store.connected && !isAvailable {
+                    Label("This torrent is no longer on this instance.", systemImage: "info.circle")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
                 header
 
                 VStack(alignment: .leading, spacing: 12) {
@@ -34,7 +42,7 @@ struct TorrentDetail: View {
                                 .foregroundStyle(AppTheme.secondaryText)
                             Spacer()
                             Text("\(Int(current.progress * 100))%")
-                                .foregroundStyle(.white)
+                                .foregroundStyle(AppTheme.primaryText)
                                 .monospacedDigit()
                         }
                         .font(.subheadline.weight(.semibold))
@@ -63,10 +71,13 @@ struct TorrentDetail: View {
                     HStack {
                         CardSectionTitle("Files")
                         Spacer()
-                        if loadingDetails { ProgressView().controlSize(.small) }
+                        if loadingFiles { ProgressView().controlSize(.small) }
                     }
-                    if files.isEmpty {
-                        Text(loadingDetails ? "Loading files…" : "No file details available")
+                    if let filesError {
+                        DetailLoadFailure(message: filesError) { Task { await loadFiles() } }
+                    }
+                    if files.isEmpty && filesError == nil {
+                        Text(loadingFiles ? "Loading files…" : "No files available yet")
                             .font(.subheadline).foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(16).darkCard(cornerRadius: 18)
@@ -100,7 +111,7 @@ struct TorrentDetail: View {
                                             Text(priorityLabel(file.priority)).font(.caption.weight(.medium))
                                         }
                                     }
-                                    .disabled(!store.canControl || changingFile != nil)
+                                    .disabled(!store.canControl || !isAvailable || changingFile != nil)
                                     .accessibilityLabel("Priority for \(file.name)")
                                 }
                                 .padding(.vertical, 12)
@@ -112,26 +123,41 @@ struct TorrentDetail: View {
                     }
                 }
 
-                if !trackers.isEmpty {
+                Group {
                     VStack(alignment: .leading, spacing: 12) {
-                        CardSectionTitle("Trackers")
-                        LazyVStack(spacing: 0) {
-                            ForEach(Array(trackers.enumerated()), id: \.offset) { index, tracker in
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(tracker.url).font(.subheadline).lineLimit(2)
-                                    if let message = tracker.msg, !message.isEmpty {
-                                        Text(message).font(.caption)
-                                            .foregroundStyle(
-                                                (tracker.status ?? 0) >= 3 ? Color.red : Color.secondary)
-                                    }
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 12)
-                                if index < trackers.count - 1 { Divider().overlay(AppTheme.border) }
-                            }
+                        HStack {
+                            CardSectionTitle("Trackers")
+                            Spacer()
+                            if loadingTrackers { ProgressView().controlSize(.small) }
                         }
-                        .padding(.horizontal, 16)
-                        .darkCard(cornerRadius: 18)
+                        if let trackersError {
+                            DetailLoadFailure(message: trackersError) { Task { await loadTrackers() } }
+                        }
+                        if trackers.isEmpty && trackersError == nil {
+                            Text(loadingTrackers ? "Loading trackers…" : "No trackers for this torrent")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(16).darkCard(cornerRadius: 18)
+                        }
+                        if !trackers.isEmpty {
+                            LazyVStack(spacing: 0) {
+                                ForEach(Array(trackers.enumerated()), id: \.offset) { index, tracker in
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(tracker.url).font(.subheadline).lineLimit(2)
+                                        if let message = tracker.msg, !message.isEmpty {
+                                            Text(message).font(.caption)
+                                                .foregroundStyle(
+                                                    (tracker.status ?? 0) >= 3 ? Color.red : Color.secondary)
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.vertical, 12)
+                                    if index < trackers.count - 1 { Divider().overlay(AppTheme.border) }
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .darkCard(cornerRadius: 18)
+                        }
                     }
                 }
 
@@ -148,7 +174,7 @@ struct TorrentDetail: View {
                             HStack {
                                 Text("Date added").foregroundStyle(AppTheme.secondaryText)
                                 Spacer()
-                                Text(date, style: .date).foregroundStyle(.white)
+                                Text(date, style: .date).foregroundStyle(AppTheme.primaryText)
                             }
                             .font(.subheadline)
                             .padding(.vertical, 15)
@@ -174,16 +200,40 @@ struct TorrentDetail: View {
         .navigationBarTitleDisplayMode(.inline)
         .task(id: torrent.id) { await loadDetails() }
         .refreshable { await loadDetails() }
+        .onChange(of: store.activeInstanceID) { _, _ in dismiss() }
     }
     private func loadDetails() async {
-        loadingDetails = true
-        async let nextFiles = store.torrentFiles(torrent.id)
-        async let nextTrackers = store.torrentTrackers(torrent.id)
-        if let result = await nextFiles { files = result }
-        if let result = await nextTrackers {
-            trackers = result.filter { !$0.url.isEmpty && !$0.url.hasPrefix("**") }
+        async let files: Void = loadFiles()
+        async let trackers: Void = loadTrackers()
+        _ = await (files, trackers)
+    }
+    private func loadFiles() async {
+        guard !loadingFiles else { return }
+        loadingFiles = true
+        filesError = nil
+        defer { loadingFiles = false }
+        do {
+            let result = try await store.torrentFiles(torrent.id)
+            guard !Task.isCancelled else { return }
+            files = result
+        } catch {
+            if !Task.isCancelled && !(error is CancellationError) { filesError = QBError.message(for: error) }
         }
-        loadingDetails = false
+    }
+    private func loadTrackers() async {
+        guard !loadingTrackers else { return }
+        loadingTrackers = true
+        trackersError = nil
+        defer { loadingTrackers = false }
+        do {
+            let result = try await store.torrentTrackers(torrent.id)
+            guard !Task.isCancelled else { return }
+            trackers = result.filter { !$0.url.isEmpty && !$0.url.hasPrefix("**") }
+        } catch {
+            if !Task.isCancelled && !(error is CancellationError) {
+                trackersError = QBError.message(for: error)
+            }
+        }
     }
     private func priorityLabel(_ value: Int) -> String {
         switch value {
@@ -197,7 +247,7 @@ struct TorrentDetail: View {
         changingFile = file.id
         Task {
             if await store.setFilePriority(torrent: torrent.id, fileID: file.id, priority: priority) {
-                files = await store.torrentFiles(torrent.id) ?? files
+                await loadFiles()
             }
             changingFile = nil
         }
@@ -209,7 +259,7 @@ struct TorrentDetail: View {
                     .font(.title2)
                     .foregroundStyle(current.state.color)
                     .frame(width: 50, height: 50)
-                    .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
+                    .background(AppTheme.primaryText.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(current.state.rawValue)
                         .font(.subheadline.weight(.semibold))
@@ -221,7 +271,7 @@ struct TorrentDetail: View {
             }
             Text(current.name)
                 .font(.title2.bold())
-                .foregroundStyle(.white)
+                .foregroundStyle(AppTheme.primaryText)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
         }
@@ -245,7 +295,7 @@ struct TorrentDetail: View {
             }.buttonStyle(.glassProminent)
         }
         .tint(.red)
-        .disabled(!store.canControl)
+        .disabled(!store.canControl || !isAvailable)
         .confirmationDialog(
             "\(removal?.rawValue ?? "Remove") torrent?",
             isPresented: Binding(
@@ -272,5 +322,19 @@ struct TorrentDetail: View {
         Task {
             if await store.delete(torrent.id, deleteFiles: deleteFiles) { dismiss() }
         }
+    }
+}
+
+private struct DetailLoadFailure: View {
+    let message: String
+    let retry: () -> Void
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(message, systemImage: "exclamationmark.circle")
+                .font(.subheadline).foregroundStyle(.secondary)
+            Button("Retry", action: retry).buttonStyle(.bordered)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16).darkCard(cornerRadius: 18)
     }
 }

@@ -102,7 +102,7 @@ struct SearchConnectionNotice: View {
             }
             .font(.footnote)
             .padding(12)
-            .background(Color(white: 0.1), in: RoundedRectangle(cornerRadius: 16))
+            .background(AppTheme.formRowBackground, in: RoundedRectangle(cornerRadius: 16))
             .listRowInsets(EdgeInsets(top: 4, leading: 18, bottom: 4, trailing: 18))
             .listRowBackground(Color.clear).listRowSeparator(.hidden)
         }

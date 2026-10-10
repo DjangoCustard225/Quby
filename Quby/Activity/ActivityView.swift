@@ -95,11 +95,11 @@ struct ActivityView: View {
                 .font(.title2)
                 .foregroundStyle(.blue)
                 .frame(width: 50, height: 50)
-                .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
+                .background(AppTheme.primaryText.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
             VStack(alignment: .leading, spacing: 4) {
                 Text(store.activeInstance?.name ?? "qBittorrent")
                     .font(.headline)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppTheme.primaryText)
                 HStack(spacing: 6) {
                     Circle()
                         .fill(store.online ? Color.green : Color.orange)

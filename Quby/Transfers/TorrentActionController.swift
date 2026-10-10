@@ -6,6 +6,10 @@ enum TorrentAction: String, CaseIterable, Identifiable {
     case category = "Set category"
     case recheck = "Force recheck"
     case reannounce = "Force reannounce"
+    case pause = "Pause"
+    case resume = "Resume"
+    case delete = "Delete"
+    case purge = "Purge"
     var id: Self { self }
     var symbol: String {
         switch self {
@@ -13,6 +17,10 @@ enum TorrentAction: String, CaseIterable, Identifiable {
         case .category: "tag"
         case .recheck: "checkmark.arrow.trianglehead.counterclockwise"
         case .reannounce: "antenna.radiowaves.left.and.right"
+        case .pause: "pause"
+        case .resume: "play"
+        case .delete: "minus.circle"
+        case .purge: "trash"
         }
     }
 }
@@ -28,6 +36,7 @@ struct TorrentActionRequest: Identifiable {
 @MainActor @Observable
 final class TorrentActionController {
     var editor: TorrentActionRequest?
+    var removal: TorrentActionRequest?
     private(set) var running = false
     var feedback: String?
     var failure: String?
@@ -38,6 +47,9 @@ final class TorrentActionController {
             action: action, torrents: torrents, instanceID: store.activeInstanceID)
         switch action {
         case .location, .category: editor = request
+        case .delete, .purge: removal = request
+        case .pause, .resume:
+            Task { await submit(action == .pause ? .pause : .resume, request: request, store: store) }
         case .recheck, .reannounce:
             Task { await submit(action == .recheck ? .recheck : .reannounce, request: request, store: store) }
         }
@@ -59,6 +71,9 @@ final class TorrentActionController {
                 case .category: "Category change requested"
                 case .recheck: "Recheck requested"
                 case .reannounce: "Reannounce requested"
+                case .pause: "Pause requested"
+                case .resume: "Resume requested"
+                case .delete: "Removal requested"
                 }
             return true
         case .failed(let message):

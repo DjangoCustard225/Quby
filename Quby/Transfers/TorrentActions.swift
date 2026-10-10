@@ -16,7 +16,9 @@ private struct TorrentDetailActions: ViewModifier {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     TorrentDetailActionMenu(
-                        enabled: store.canControl && !actions.running, running: actions.running
+                        enabled: store.canControl && !actions.running
+                            && store.torrents.contains(where: { $0.id == torrent.id }),
+                        running: actions.running
                     ) {
                         let current = store.torrents.first { $0.id == torrent.id } ?? torrent
                         actions.choose($0, torrents: [current], store: store)
@@ -49,7 +51,10 @@ struct TorrentActionButtons: View {
     let onAction: (TorrentAction) -> Void
     var body: some View {
         ForEach(TorrentAction.allCases) { action in
-            Button(action.rawValue, systemImage: action.symbol) { onAction(action) }.disabled(!enabled)
+            Button(
+                action.rawValue, systemImage: action.symbol,
+                role: action == .delete || action == .purge ? .destructive : nil
+            ) { onAction(action) }.disabled(!enabled)
         }
     }
 }
@@ -62,6 +67,29 @@ struct TorrentActionPresentation: ViewModifier {
         content
             .sheet(item: $actions.editor) { request in
                 TorrentEditView(store: store, request: request, actions: actions)
+            }
+            .confirmationDialog(
+                "\(actions.removal?.action.rawValue ?? "Remove") \(actions.removal?.torrents.count ?? 0) \(actions.removal?.torrents.count == 1 ? "torrent" : "torrents")?",
+                isPresented: Binding(
+                    get: { actions.removal != nil }, set: { if !$0 { actions.removal = nil } }),
+                titleVisibility: .visible, presenting: actions.removal
+            ) { request in
+                Button(
+                    request.action == .purge ? "Purge torrents and files" : "Delete torrents",
+                    role: .destructive
+                ) {
+                    Task {
+                        await actions.submit(
+                            .delete(deleteFiles: request.action == .purge), request: request, store: store)
+                    }
+                }
+                .disabled(!store.canControl || actions.running)
+                Button("Cancel", role: .cancel) {}
+            } message: { request in
+                let names = request.torrents.prefix(3).map(\.name).joined(separator: ", ")
+                Text(
+                    "\(names)\(request.torrents.count > 3 ? " and \(request.torrents.count - 3) more" : ""). \(request.action == .purge ? "Downloaded files will also be permanently deleted." : "Downloaded files will be kept.")"
+                )
             }
             .alert(
                 "Request failed",
@@ -93,6 +121,7 @@ struct TorrentActionPresentation: ViewModifier {
             }
             .onChange(of: store.activeInstanceID) { _, _ in
                 actions.editor = nil
+                actions.removal = nil
                 actions.feedback = nil
             }
     }
