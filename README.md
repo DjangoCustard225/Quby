@@ -7,6 +7,17 @@
 
 Manage your torrents from an iPhone or iPad. Requires iOS 26 or later and a reachable qBittorrent Web UI.
 
+## Screenshots
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/torrent-details.png" width="240" alt="Torrent details with progress, status, and file information"></td>
+    <td><img src="docs/screenshots/activity.png" width="240" alt="Activity with transfer speeds and session statistics"></td>
+    <td><img src="docs/screenshots/search.png" width="240" alt="Search with category and tracker browsing"></td>
+    <td><img src="docs/screenshots/settings.png" width="240" alt="Settings with server instances, speed limits, and appearance controls"></td>
+  </tr>
+</table>
+
 ## Features
 
 - Live transfers, speed summaries, and torrent details.
@@ -17,15 +28,6 @@ Manage your torrents from an iPhone or iPad. Requires iOS 26 or later and a reac
 - Bulk pause, resume, delete, location/category changes, recheck, and reannounce.
 - Normal and alternative speed limits in Settings.
 - Light, dark, or system appearance; adjustable list density and scroll effects.
-
-## Screenshots
-
-<p align="center">
-  <img src="docs/screenshots/torrent-details.png" width="190" alt="Torrent details with progress, status, and file information">
-  <img src="docs/screenshots/activity.png" width="190" alt="Activity with transfer speeds and session statistics">
-  <img src="docs/screenshots/search.png" width="190" alt="Search with category and tracker browsing">
-  <img src="docs/screenshots/settings.png" width="190" alt="Settings with server instances, speed limits, and appearance controls">
-</p>
 
 ## Connect
 
